@@ -70,5 +70,36 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       assert [param] = result.operation.parameters
       assert param.type == :boolean
     end
+
+    # Phase 2: Special Types
+
+    test "converts enum to string with enum values", %{path: path} do
+      schema = Zoi.map(%{status: Zoi.enum(["pending", "approved", "rejected"])})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.type == :string
+      assert param.enum == ["pending", "approved", "rejected"]
+    end
+
+    test "converts datetime to string with date-time format", %{path: path} do
+      schema = Zoi.map(%{created_at: Zoi.datetime()})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.type == :string
+      assert param.format == :"date-time"
+    end
+
+    test "converts field with default to parameter with default value", %{path: path} do
+      schema = Zoi.map(%{direction: Zoi.enum(["asc", "desc"]) |> Zoi.default("asc")})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.default == "asc"
+    end
   end
 end
