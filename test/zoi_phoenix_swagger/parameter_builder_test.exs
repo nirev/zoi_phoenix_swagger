@@ -101,5 +101,26 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       assert [param] = result.operation.parameters
       assert param.default == "asc"
     end
+
+    # Phase 3: Location Handling
+
+    test "uses metadata to set path location", %{path: path} do
+      schema = Zoi.map(%{category_id: Zoi.string(metadata: [in: :path])})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.in == :path
+      assert param.required == true
+    end
+
+    test "uses metadata to set header location", %{path: path} do
+      schema = Zoi.map(%{authorization: Zoi.string(metadata: [in: :header])})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.in == :header
+    end
   end
 end
