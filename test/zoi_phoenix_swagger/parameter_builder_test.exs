@@ -204,5 +204,46 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       # phoenix_swagger translates example to x-example
       assert Map.get(param, :"x-example") == "abc123"
     end
+
+    # Phase 7: Full Integration
+
+    test "handles complete schema from requirements", %{path: path} do
+      schema =
+        Zoi.map(%{
+          filter:
+            Zoi.map(%{
+              category_id: Zoi.string(metadata: [in: :path]),
+              status: Zoi.enum(["pending", "approved", "rejected"]) |> Zoi.optional(),
+              inserted_at_from: Zoi.datetime() |> Zoi.optional(),
+              inserted_at_to: Zoi.datetime() |> Zoi.optional(),
+              reviewed_by: Zoi.string() |> Zoi.optional()
+            }),
+          order_by: Zoi.enum(["inserted_at", "status", "category_id"]) |> Zoi.optional(),
+          order_by_direction: Zoi.enum(["asc", "desc"]) |> Zoi.default("asc")
+        })
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      params = result.operation.parameters
+      assert length(params) == 7
+
+      # Check category_id is path param with flat name
+      category_param = Enum.find(params, &(&1.name == "category_id"))
+      assert category_param.in == :path
+      assert category_param.required == true
+
+      # Check status is optional enum with bracket notation
+      status_param = Enum.find(params, &(&1.name == "filter[status]"))
+      assert status_param.required == false
+      assert status_param.enum == ["pending", "approved", "rejected"]
+
+      # Check datetime format
+      from_param = Enum.find(params, &(&1.name == "filter[inserted_at_from]"))
+      assert from_param.format == :"date-time"
+
+      # Check default value
+      direction_param = Enum.find(params, &(&1.name == "order_by_direction"))
+      assert direction_param.default == "asc"
+    end
   end
 end
