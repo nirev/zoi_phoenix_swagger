@@ -161,5 +161,27 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       assert order_param != nil
       assert filter_param != nil
     end
+
+    # Phase 5: Array Types
+
+    test "converts array of strings to array parameter", %{path: path} do
+      schema = Zoi.map(%{tags: Zoi.array(Zoi.string())})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.type == :array
+      assert param.items == %{type: :string}
+    end
+
+    test "converts array of enums to array with enum items", %{path: path} do
+      schema = Zoi.map(%{statuses: Zoi.array(Zoi.enum(["active", "inactive"]))})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.type == :array
+      assert param.items == %{type: :string, enum: ["active", "inactive"]}
+    end
   end
 end

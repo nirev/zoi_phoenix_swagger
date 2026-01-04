@@ -64,6 +64,7 @@ defmodule ZoiPhoenixSwagger do
     opts = maybe_add_opt(opts, :enum, prop_schema[:enum])
     opts = maybe_add_opt(opts, :format, prop_schema[:format])
     opts = maybe_add_opt(opts, :default, prop_schema[:default])
+    opts = maybe_add_opt(opts, :items, prop_schema[:items])
 
     Path.parameter(path_object, name, location, type, description, opts)
   end
