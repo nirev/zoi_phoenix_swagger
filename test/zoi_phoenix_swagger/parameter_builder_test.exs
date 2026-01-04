@@ -183,5 +183,26 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       assert param.type == :array
       assert param.items == %{type: :string, enum: ["active", "inactive"]}
     end
+
+    # Phase 6: Description & Example
+
+    test "uses description from schema", %{path: path} do
+      schema = Zoi.map(%{name: Zoi.string(description: "The user's full name")})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.description == "The user's full name"
+    end
+
+    test "uses example from schema", %{path: path} do
+      schema = Zoi.map(%{category_id: Zoi.string(example: "abc123")})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      # phoenix_swagger translates example to x-example
+      assert Map.get(param, :"x-example") == "abc123"
+    end
   end
 end

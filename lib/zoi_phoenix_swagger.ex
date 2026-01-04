@@ -57,7 +57,7 @@ defmodule ZoiPhoenixSwagger do
     location = get_location(metadata_map, full_path)
     name = build_param_name(path, key, location)
     type = prop_schema[:type]
-    description = ""
+    description = prop_schema[:description] || ""
     is_required = location == :path or key in required
 
     opts = [required: is_required]
@@ -65,6 +65,7 @@ defmodule ZoiPhoenixSwagger do
     opts = maybe_add_opt(opts, :format, prop_schema[:format])
     opts = maybe_add_opt(opts, :default, prop_schema[:default])
     opts = maybe_add_opt(opts, :items, prop_schema[:items])
+    opts = maybe_add_opt(opts, :example, prop_schema[:example])
 
     Path.parameter(path_object, name, location, type, description, opts)
   end
