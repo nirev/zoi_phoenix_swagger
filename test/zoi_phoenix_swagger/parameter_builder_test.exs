@@ -31,5 +31,17 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       assert param.type == :string
       assert param.required == true
     end
+
+    test "converts optional string to non-required parameter", %{path: path} do
+      schema =
+        Zoi.map(%{
+          name: Zoi.string() |> Zoi.optional()
+        })
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.required == false
+    end
   end
 end
