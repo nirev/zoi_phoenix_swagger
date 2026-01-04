@@ -122,5 +122,44 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       assert [param] = result.operation.parameters
       assert param.in == :header
     end
+
+    # Phase 4: Nested Maps
+
+    test "flattens nested map with bracket notation", %{path: path} do
+      schema = Zoi.map(%{filter: Zoi.map(%{status: Zoi.string()})})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.name == "filter[status]"
+    end
+
+    test "flattens deeply nested maps", %{path: path} do
+      schema = Zoi.map(%{filter: Zoi.map(%{user: Zoi.map(%{name: Zoi.string()})})})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.name == "filter[user][name]"
+    end
+
+    test "mixes top-level and nested parameters", %{path: path} do
+      schema =
+        Zoi.map(%{
+          order_by: Zoi.string(),
+          filter: Zoi.map(%{status: Zoi.string()})
+        })
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      params = result.operation.parameters
+      assert length(params) == 2
+
+      order_param = Enum.find(params, &(&1.name == "order_by"))
+      filter_param = Enum.find(params, &(&1.name == "filter[status]"))
+
+      assert order_param != nil
+      assert filter_param != nil
+    end
   end
 end
