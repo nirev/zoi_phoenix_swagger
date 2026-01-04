@@ -43,5 +43,32 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       assert [param] = result.operation.parameters
       assert param.required == false
     end
+
+    test "converts integer to integer type parameter", %{path: path} do
+      schema = Zoi.map(%{age: Zoi.integer()})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.type == :integer
+    end
+
+    test "converts float to number type parameter", %{path: path} do
+      schema = Zoi.map(%{price: Zoi.float()})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.type == :number
+    end
+
+    test "converts boolean to boolean type parameter", %{path: path} do
+      schema = Zoi.map(%{active: Zoi.boolean()})
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert param.type == :boolean
+    end
   end
 end
