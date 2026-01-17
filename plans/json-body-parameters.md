@@ -79,24 +79,24 @@ end
 
 ## Proposed Solution
 
-### New Function: `schema_definition/2`
+### New Function: `schema_definition/1`
 
 Create a new function that converts a Zoi schema into a Phoenix Swagger schema definition suitable for use in `swagger_definitions`:
 
 ```elixir
-@spec schema_definition(atom(), Zoi.schema()) :: {atom(), map()}
-def schema_definition(schema_name, zoi_schema)
+@spec schema_definition(Zoi.schema()) :: map()
+def schema_definition(zoi_schema)
 ```
 
 **Purpose**: Transform Zoi schema into Phoenix Swagger schema definition with proper nesting (not flattened) and top-level example.
 
-**Returns**: A tuple `{schema_name, schema_map}` that can be used in `swagger_definitions/0`
+**Returns**: A map representing the schema that can be used as a value in `swagger_definitions/0`
 
 ### Design Approach
 
 #### 1. Schema Conversion Strategy
 
-Unlike `parameters/2` which flattens nested maps, `schema_definition/2` should:
+Unlike `parameters/2` which flattens nested maps, `schema_definition/1` should:
 
 - **Preserve Object Nesting**: Convert `Zoi.map()` to nested `properties` without flattening
 - **Generate Schema Properties**: Extract type, description, required fields, enum, format, etc.
@@ -145,41 +145,31 @@ defmodule ZoiPhoenixSwagger do
   @doc """
   Converts a Zoi schema to a Phoenix Swagger schema definition.
 
-  Returns a tuple suitable for use in swagger_definitions/0.
+  Returns a schema map suitable for use as a value in swagger_definitions/0.
 
   ## Example
 
       def swagger_definitions do
         %{
-          ZoiPhoenixSwagger.schema_definition(:User, @user_schema)
+          CreateUserRequest: ZoiPhoenixSwagger.schema_definition(@create_user_schema),
+          UpdateUserRequest: ZoiPhoenixSwagger.schema_definition(@update_user_schema)
         }
       end
 
-  Or used inline in parameters:
-
-      swagger_path :create do
-        post "/api/users"
-        {name, schema} = ZoiPhoenixSwagger.schema_definition(:CreateUser, @create_user_schema)
-        parameters do
-          body :body, Schema.new(schema), "User to create", required: true
-        end
-      end
+  The schema name is specified as the map key, allowing for clean, readable definitions.
   """
-  @spec schema_definition(atom(), Zoi.schema()) :: {atom(), map()}
-  def schema_definition(schema_name, zoi_schema) do
+  @spec schema_definition(Zoi.schema()) :: map()
+  def schema_definition(zoi_schema) do
     json_schema = Zoi.to_json_schema(zoi_schema)
 
     swagger_schema = %{
       type: :object,
-      title: Atom.to_string(schema_name),
       properties: convert_properties(json_schema[:properties] || %{}),
       required: json_schema[:required] || []
     }
 
     # Add top-level example if we can generate one
-    swagger_schema = maybe_add_example(swagger_schema, json_schema)
-
-    {schema_name, swagger_schema}
+    maybe_add_example(swagger_schema, json_schema)
   end
 
   # ... implementation functions ...
@@ -297,7 +287,7 @@ defmodule MyAppWeb.UserController do
   # Generate Swagger definition
   def swagger_definitions do
     %{
-      ZoiPhoenixSwagger.schema_definition(:CreateUserRequest, @create_user_schema)
+      CreateUserRequest: ZoiPhoenixSwagger.schema_definition(@create_user_schema)
     }
   end
 
@@ -328,7 +318,6 @@ The above would generate:
 {
   "CreateUserRequest": {
     "type": "object",
-    "title": "CreateUserRequest",
     "required": ["name", "email", "tags"],
     "properties": {
       "name": {
@@ -386,20 +375,20 @@ The above would generate:
 
 ### No Breaking Changes
 
-The new `schema_definition/2` function is completely separate from the existing `parameters/2` function:
+The new `schema_definition/1` function is completely separate from the existing `parameters/2` function:
 
 - **Existing code continues to work**: `parameters/2` still handles query/path/header parameters with bracket notation
-- **New functionality is opt-in**: Users must explicitly call `schema_definition/2` for body parameters
+- **New functionality is opt-in**: Users must explicitly call `schema_definition/1` for body parameters
 - **Different use cases**:
   - `parameters/2`: Flattened parameters (query/path/header)
-  - `schema_definition/2`: Nested schemas (body parameters)
+  - `schema_definition/1`: Nested schemas (body parameters)
 
 ### Code Organization
 
 ```
 lib/zoi_phoenix_swagger.ex
 ├── parameters/2          # Existing - for query/path/header params
-├── schema_definition/2   # New - for body parameter schemas
+├── schema_definition/1   # New - for body parameter schemas
 ├── build_params/5        # Existing - flattens nested maps
 ├── convert_properties/1  # New - preserves nested structure
 ├── convert_property/1    # New - converts individual properties
@@ -417,18 +406,16 @@ Create `test/zoi_phoenix_swagger/schema_definition_test.exs`:
 defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
   use ExUnit.Case, async: true
 
-  describe "schema_definition/2" do
+  describe "schema_definition/1" do
     test "converts simple schema with primitive types" do
       schema = Zoi.map(%{
         name: Zoi.string(description: "Name", example: "John"),
         age: Zoi.integer(description: "Age", example: 30)
       })
 
-      {name, swagger_schema} = ZoiPhoenixSwagger.schema_definition(:User, schema)
+      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
-      assert name == :User
       assert swagger_schema.type == :object
-      assert swagger_schema.title == "User"
       assert swagger_schema.required == [:name, :age]
 
       assert swagger_schema.properties.name == %{
@@ -457,7 +444,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
       })
 
-      {_name, swagger_schema} = ZoiPhoenixSwagger.schema_definition(:Request, schema)
+      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
       assert swagger_schema.properties.user.type == :object
       assert swagger_schema.properties.user.properties.name.type == :string
@@ -477,7 +464,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         optional_field: Zoi.string() |> Zoi.optional()
       })
 
-      {_name, swagger_schema} = ZoiPhoenixSwagger.schema_definition(:Schema, schema)
+      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
       assert :required_field in swagger_schema.required
       refute :optional_field in swagger_schema.required
@@ -488,7 +475,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         tags: Zoi.array(Zoi.string(), example: ["tag1", "tag2"])
       })
 
-      {_name, swagger_schema} = ZoiPhoenixSwagger.schema_definition(:Schema, schema)
+      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
       assert swagger_schema.properties.tags.type == :array
       assert swagger_schema.properties.tags.items.type == :string
@@ -500,7 +487,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         status: Zoi.enum(["active", "inactive"], example: "active")
       })
 
-      {_name, swagger_schema} = ZoiPhoenixSwagger.schema_definition(:Schema, schema)
+      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
       assert swagger_schema.properties.status.type == :string
       assert swagger_schema.properties.status.enum == ["active", "inactive"]
@@ -512,7 +499,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         created_at: Zoi.datetime()
       })
 
-      {_name, swagger_schema} = ZoiPhoenixSwagger.schema_definition(:Schema, schema)
+      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
       assert swagger_schema.properties.created_at.type == :string
       assert swagger_schema.properties.created_at.format == :"date-time"
@@ -523,7 +510,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         direction: Zoi.enum(["asc", "desc"]) |> Zoi.default("asc")
       })
 
-      {_name, swagger_schema} = ZoiPhoenixSwagger.schema_definition(:Schema, schema)
+      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
       assert swagger_schema.properties.direction.default == "asc"
       assert swagger_schema.example.direction == "asc"
@@ -541,7 +528,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         tags: Zoi.array(Zoi.string(), example: ["developer", "elixir"])
       })
 
-      {_name, swagger_schema} = ZoiPhoenixSwagger.schema_definition(:CreateUser, schema)
+      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
       # Verify structure
       assert swagger_schema.type == :object
@@ -570,7 +557,7 @@ end
 ## Implementation Phases
 
 ### Phase 1: Core Schema Conversion
-- Implement `schema_definition/2` function
+- Implement `schema_definition/1` function
 - Implement `convert_properties/1` and `convert_property/1`
 - Handle primitive types (string, integer, float, boolean)
 - Handle nested objects without flattening
@@ -605,11 +592,11 @@ end
 
 ### 2. Auto-detect Body Parameters by Metadata
 
-**Rejected because**: The `swagger_definitions/0` function needs to be defined at module level, not within a swagger_path block. Auto-detecting would require registering definitions globally, which is more complex than letting users explicitly call `schema_definition/2`.
+**Rejected because**: The `swagger_definitions/0` function needs to be defined at module level, not within a swagger_path block. Auto-detecting would require registering definitions globally, which is more complex than letting users explicitly call `schema_definition/1`.
 
-### 3. Generate Schema Names Automatically
+### 3. Return Tuple with Schema Name
 
-**Rejected because**: Users should have control over schema naming for reusability. Auto-generated names like `Index_Body_Param_1` are not user-friendly and don't support schema reuse across endpoints.
+**Rejected because**: Having the function return `{schema_name, schema_map}` creates awkward syntax in `swagger_definitions/0`. The cleaner approach is to have users specify the schema name as the map key and use `schema_definition/1` to generate just the schema value. This makes the definitions more readable and follows Elixir idioms.
 
 ## Success Criteria
 
