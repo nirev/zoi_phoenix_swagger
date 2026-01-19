@@ -34,6 +34,36 @@ defmodule ZoiPhoenixSwagger do
     )
   end
 
+  @doc """
+  Converts a Zoi schema to a Phoenix Swagger schema definition.
+
+  Returns a schema map suitable for use as a value in swagger_definitions/0.
+
+  ## Example
+
+      def swagger_definitions do
+        %{
+          CreateUserRequest: ZoiPhoenixSwagger.schema_definition(@create_user_schema),
+          UpdateUserRequest: ZoiPhoenixSwagger.schema_definition(@update_user_schema)
+        }
+      end
+
+  The schema name is specified as the map key, allowing for clean, readable definitions.
+  """
+  @spec schema_definition(Zoi.schema()) :: map()
+  def schema_definition(zoi_schema) do
+    json_schema = Zoi.to_json_schema(zoi_schema)
+
+    swagger_schema = %{
+      type: :object,
+      properties: convert_properties(json_schema[:properties] || %{}),
+      required: json_schema[:required] || []
+    }
+
+    # Add top-level example if we can generate one
+    maybe_add_example(swagger_schema, json_schema)
+  end
+
   defp build_params(properties, required, path, metadata_map, path_object) do
     Enum.reduce(properties, path_object, fn {key, prop_schema}, acc ->
       build_param(key, prop_schema, required, path, metadata_map, acc)
@@ -116,4 +146,88 @@ defmodule ZoiPhoenixSwagger do
 
   defp maybe_add_opt(opts, _key, nil), do: opts
   defp maybe_add_opt(opts, key, value), do: Keyword.put(opts, key, value)
+
+  # Schema definition helper functions
+
+  # Convert JSON Schema properties to Swagger properties
+  defp convert_properties(json_properties) do
+    Map.new(json_properties, fn {key, prop_schema} ->
+      {key, convert_property(prop_schema)}
+    end)
+  end
+
+  # Convert a single property - nested object
+  defp convert_property(%{type: :object, properties: nested_props} = schema) do
+    %{
+      type: :object,
+      properties: convert_properties(nested_props)
+    }
+    |> maybe_add_property_opt(:required, schema[:required])
+    |> maybe_add_property_opt(:description, schema[:description])
+    |> maybe_add_property_opt(:example, schema[:example])
+  end
+
+  # Convert a single property - array type
+  defp convert_property(%{type: :array} = schema) do
+    %{
+      type: :array,
+      items: convert_property(schema[:items] || %{type: :string})
+    }
+    |> maybe_add_property_opt(:description, schema[:description])
+    |> maybe_add_property_opt(:example, schema[:example])
+  end
+
+  # Convert a single property - primitive type
+  defp convert_property(schema) do
+    %{type: schema[:type]}
+    |> maybe_add_property_opt(:description, schema[:description])
+    |> maybe_add_property_opt(:enum, schema[:enum])
+    |> maybe_add_property_opt(:format, schema[:format])
+    |> maybe_add_property_opt(:default, schema[:default])
+    |> maybe_add_property_opt(:example, schema[:example])
+  end
+
+  defp maybe_add_property_opt(map, _key, nil), do: map
+  defp maybe_add_property_opt(map, key, value), do: Map.put(map, key, value)
+
+  # Generate top-level example from schema
+  defp maybe_add_example(swagger_schema, json_schema) do
+    case generate_example(json_schema) do
+      nil -> swagger_schema
+      example -> Map.put(swagger_schema, :example, example)
+    end
+  end
+
+  defp generate_example(%{properties: properties}) when is_map(properties) do
+    example =
+      properties
+      |> Enum.map(fn {key, prop_schema} ->
+        case generate_property_example(prop_schema) do
+          nil -> nil
+          value -> {key, value}
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Map.new()
+
+    if map_size(example) > 0, do: example, else: nil
+  end
+
+  defp generate_example(_), do: nil
+
+  defp generate_property_example(%{example: example}), do: example
+
+  defp generate_property_example(%{type: :object, properties: nested_props}) do
+    generate_example(%{properties: nested_props})
+  end
+
+  defp generate_property_example(%{type: :array, items: items}) do
+    case generate_property_example(items) do
+      nil -> nil
+      item_example -> [item_example]
+    end
+  end
+
+  defp generate_property_example(%{default: default}), do: default
+  defp generate_property_example(_), do: nil
 end
