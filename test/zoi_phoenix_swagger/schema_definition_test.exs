@@ -76,8 +76,14 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
 
       swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
 
-      assert :required_field in swagger_schema.required
-      refute :optional_field in swagger_schema.required
+      assert %{
+               type: :object,
+               required: [:required_field],
+               properties: %{
+                 required_field: %{type: :string},
+                 optional_field: %{type: :string}
+               }
+             } == swagger_schema
     end
 
     test "handles arrays" do
