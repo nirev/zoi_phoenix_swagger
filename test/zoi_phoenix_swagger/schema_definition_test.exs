@@ -164,7 +164,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
 
       assert %{
                type: :object,
-               required: [],
+               required: [:direction],
                properties: %{
                  direction: %{
                    type: :string,
