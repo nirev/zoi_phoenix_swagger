@@ -7,6 +7,7 @@ defmodule ZoiPhoenixSwagger do
 
   alias PhoenixSwagger.Path
   alias PhoenixSwagger.Path.PathObject
+  alias PhoenixSwagger.Schema
 
   @doc """
   Converts a Zoi schema to Phoenix Swagger parameters.
@@ -32,6 +33,34 @@ defmodule ZoiPhoenixSwagger do
       metadata_map,
       path_object
     )
+  end
+
+  @doc """
+  Converts a Zoi schema to a Phoenix Swagger schema definition.
+
+  Returns a JSON map (with string keys) suitable for use in swagger_definitions/0,
+  matching the output format of the `swagger_schema` macro.
+
+  ## Example
+
+      def swagger_definitions do
+        %{
+          CreateUserRequest: ZoiPhoenixSwagger.schema_definition(@create_user_schema),
+          UpdateUserRequest: ZoiPhoenixSwagger.schema_definition(@update_user_schema)
+        }
+      end
+
+  The schema name is specified as the map key, allowing for clean, readable definitions.
+  """
+  @spec schema_definition(Zoi.schema()) :: map()
+  def schema_definition(zoi_schema) do
+    json_schema = Zoi.to_json_schema(zoi_schema)
+
+    %Schema{type: :object}
+    |> add_properties(json_schema[:properties] || %{})
+    |> add_required(json_schema[:required] || [])
+    |> maybe_add_schema_example(json_schema)
+    |> PhoenixSwagger.to_json()
   end
 
   defp build_params(properties, required, path, metadata_map, path_object) do
@@ -116,4 +145,98 @@ defmodule ZoiPhoenixSwagger do
 
   defp maybe_add_opt(opts, _key, nil), do: opts
   defp maybe_add_opt(opts, key, value), do: Keyword.put(opts, key, value)
+
+  # Schema definition helper functions
+
+  # Add properties to schema
+  defp add_properties(schema, json_properties) when map_size(json_properties) == 0 do
+    schema
+  end
+
+  defp add_properties(schema, json_properties) do
+    properties =
+      Map.new(json_properties, fn {key, prop_schema} ->
+        {key, convert_to_schema(prop_schema)}
+      end)
+
+    %{schema | properties: properties}
+  end
+
+  # Add required fields to schema (sorted for consistency)
+  defp add_required(schema, []), do: schema
+  defp add_required(schema, required), do: %{schema | required: Enum.sort(required)}
+
+  # Convert a single property to Schema struct - nested object
+  defp convert_to_schema(%{type: :object, properties: nested_props} = prop_schema) do
+    nested_required = prop_schema[:required] || []
+
+    %Schema{type: :object}
+    |> add_properties(nested_props)
+    |> add_required(nested_required)
+    |> maybe_add_schema_field(:description, prop_schema[:description])
+    |> maybe_add_schema_field(:example, prop_schema[:example])
+  end
+
+  # Convert a single property to Schema struct - array type
+  defp convert_to_schema(%{type: :array} = prop_schema) do
+    items_schema = convert_to_schema(prop_schema[:items] || %{type: :string})
+
+    %Schema{type: :array, items: items_schema}
+    |> maybe_add_schema_field(:description, prop_schema[:description])
+    |> maybe_add_schema_field(:example, prop_schema[:example])
+  end
+
+  # Convert a single property to Schema struct - primitive type
+  defp convert_to_schema(prop_schema) do
+    %Schema{type: prop_schema[:type]}
+    |> maybe_add_schema_field(:description, prop_schema[:description])
+    |> maybe_add_schema_field(:enum, prop_schema[:enum])
+    |> maybe_add_schema_field(:format, prop_schema[:format])
+    |> maybe_add_schema_field(:default, prop_schema[:default])
+    |> maybe_add_schema_field(:example, prop_schema[:example])
+  end
+
+  defp maybe_add_schema_field(schema, _key, nil), do: schema
+  defp maybe_add_schema_field(schema, key, value), do: Map.put(schema, key, value)
+
+  # Generate top-level example from schema
+  defp maybe_add_schema_example(swagger_schema, json_schema) do
+    case generate_example(json_schema) do
+      nil -> swagger_schema
+      example -> %{swagger_schema | example: example}
+    end
+  end
+
+  defp generate_example(%{properties: properties}) when is_map(properties) do
+    example =
+      properties
+      |> Enum.map(fn {key, prop_schema} ->
+        case generate_property_example(prop_schema) do
+          nil -> nil
+          value -> {key, value}
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+      |> Map.new()
+
+    if map_size(example) > 0, do: example, else: nil
+  end
+
+  defp generate_example(_), do: nil
+
+  defp generate_property_example(%{example: example}), do: example
+
+  defp generate_property_example(%{type: :object, properties: nested_props}) do
+    generate_example(%{properties: nested_props})
+  end
+
+  defp generate_property_example(%{type: :array, items: items}) do
+    case generate_property_example(items) do
+      nil -> nil
+      item_example -> [item_example]
+    end
+  end
+
+  defp generate_property_example(%{default: default}), do: default
+  defp generate_property_example(_), do: nil
 end
