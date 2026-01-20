@@ -1,7 +1,8 @@
 defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
   use ExUnit.Case, async: true
 
-  import PhoenixSwagger.Schema
+  import PhoenixSwagger
+  require PhoenixSwagger.Schema, as: Schema
 
   describe "schema_definition/1" do
     test "converts simple schema with primitive types" do
