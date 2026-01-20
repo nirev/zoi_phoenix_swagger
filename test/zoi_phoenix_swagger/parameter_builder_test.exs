@@ -26,10 +26,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.name == "name"
-      assert param.in == :query
-      assert param.type == :string
-      assert param.required == true
+      assert match?(%{name: "name", in: :query, type: :string, required: true}, param)
     end
 
     test "converts optional string to non-required parameter", %{path: path} do
@@ -41,7 +38,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.required == false
+      assert match?(%{name: "name", in: :query, type: :string, required: false}, param)
     end
 
     test "converts integer to integer type parameter", %{path: path} do
@@ -50,7 +47,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.type == :integer
+      assert match?(%{name: "age", in: :query, type: :integer, required: true}, param)
     end
 
     test "converts float to number type parameter", %{path: path} do
@@ -59,7 +56,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.type == :number
+      assert match?(%{name: "price", in: :query, type: :number, required: true}, param)
     end
 
     test "converts boolean to boolean type parameter", %{path: path} do
@@ -68,7 +65,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.type == :boolean
+      assert match?(%{name: "active", in: :query, type: :boolean, required: true}, param)
     end
 
     # Phase 2: Special Types
@@ -79,8 +76,17 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.type == :string
-      assert param.enum == ["pending", "approved", "rejected"]
+
+      assert match?(
+               %{
+                 name: "status",
+                 in: :query,
+                 type: :string,
+                 enum: ["pending", "approved", "rejected"],
+                 required: true
+               },
+               param
+             )
     end
 
     test "converts datetime to string with date-time format", %{path: path} do
@@ -89,8 +95,17 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.type == :string
-      assert param.format == :"date-time"
+
+      assert match?(
+               %{
+                 name: "created_at",
+                 in: :query,
+                 type: :string,
+                 format: :"date-time",
+                 required: true
+               },
+               param
+             )
     end
 
     test "converts field with default to parameter with default value", %{path: path} do
@@ -99,7 +114,18 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.default == "asc"
+
+      assert match?(
+               %{
+                 name: "direction",
+                 in: :query,
+                 type: :string,
+                 enum: ["asc", "desc"],
+                 default: "asc",
+                 required: true
+               },
+               param
+             )
     end
 
     # Phase 3: Location Handling
@@ -110,8 +136,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.in == :path
-      assert param.required == true
+      assert match?(%{name: "category_id", in: :path, type: :string, required: true}, param)
     end
 
     test "uses metadata to set header location", %{path: path} do
@@ -120,7 +145,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.in == :header
+      assert match?(%{name: "authorization", in: :header, type: :string, required: true}, param)
     end
 
     # Phase 4: Nested Maps
@@ -131,7 +156,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.name == "filter[status]"
+      assert match?(%{name: "filter[status]", in: :query, type: :string, required: true}, param)
     end
 
     test "flattens deeply nested maps", %{path: path} do
@@ -140,7 +165,11 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.name == "filter[user][name]"
+
+      assert match?(
+               %{name: "filter[user][name]", in: :query, type: :string, required: true},
+               param
+             )
     end
 
     test "mixes top-level and nested parameters", %{path: path} do
@@ -158,8 +187,12 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       order_param = Enum.find(params, &(&1.name == "order_by"))
       filter_param = Enum.find(params, &(&1.name == "filter[status]"))
 
-      assert order_param != nil
-      assert filter_param != nil
+      assert match?(%{name: "order_by", in: :query, type: :string, required: true}, order_param)
+
+      assert match?(
+               %{name: "filter[status]", in: :query, type: :string, required: true},
+               filter_param
+             )
     end
 
     # Phase 5: Array Types
@@ -170,8 +203,11 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.type == :array
-      assert param.items == %{type: :string}
+
+      assert match?(
+               %{name: "tags", in: :query, type: :array, items: %{type: :string}, required: true},
+               param
+             )
     end
 
     test "converts array of enums to array with enum items", %{path: path} do
@@ -180,8 +216,17 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.type == :array
-      assert param.items == %{type: :string, enum: ["active", "inactive"]}
+
+      assert match?(
+               %{
+                 name: "statuses",
+                 in: :query,
+                 type: :array,
+                 items: %{type: :string, enum: ["active", "inactive"]},
+                 required: true
+               },
+               param
+             )
     end
 
     # Phase 6: Description & Example
@@ -192,7 +237,17 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       result = ZoiPhoenixSwagger.parameters(path, schema)
 
       assert [param] = result.operation.parameters
-      assert param.description == "The user's full name"
+
+      assert match?(
+               %{
+                 name: "name",
+                 in: :query,
+                 type: :string,
+                 description: "The user's full name",
+                 required: true
+               },
+               param
+             )
     end
 
     test "uses example from schema", %{path: path} do
@@ -202,7 +257,16 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
 
       assert [param] = result.operation.parameters
       # phoenix_swagger translates example to x-example
-      assert Map.get(param, :"x-example") == "abc123"
+      assert match?(
+               %{
+                 name: "category_id",
+                 in: :query,
+                 type: :string,
+                 "x-example": "abc123",
+                 required: true
+               },
+               param
+             )
     end
 
     # Phase 7: Full Integration
@@ -227,23 +291,53 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
       params = result.operation.parameters
       assert length(params) == 7
 
-      # Check category_id is path param with flat name
       category_param = Enum.find(params, &(&1.name == "category_id"))
-      assert category_param.in == :path
-      assert category_param.required == true
+      status_param = Enum.find(params, &(&1.name == "filter[status]"))
+      from_param = Enum.find(params, &(&1.name == "filter[inserted_at_from]"))
+      direction_param = Enum.find(params, &(&1.name == "order_by_direction"))
+
+      # Check category_id is path param with flat name
+      assert match?(
+               %{name: "category_id", in: :path, type: :string, required: true},
+               category_param
+             )
 
       # Check status is optional enum with bracket notation
-      status_param = Enum.find(params, &(&1.name == "filter[status]"))
-      assert status_param.required == false
-      assert status_param.enum == ["pending", "approved", "rejected"]
+      assert match?(
+               %{
+                 name: "filter[status]",
+                 in: :query,
+                 type: :string,
+                 enum: ["pending", "approved", "rejected"],
+                 required: false
+               },
+               status_param
+             )
 
       # Check datetime format
-      from_param = Enum.find(params, &(&1.name == "filter[inserted_at_from]"))
-      assert from_param.format == :"date-time"
+      assert match?(
+               %{
+                 name: "filter[inserted_at_from]",
+                 in: :query,
+                 type: :string,
+                 format: :"date-time",
+                 required: false
+               },
+               from_param
+             )
 
       # Check default value
-      direction_param = Enum.find(params, &(&1.name == "order_by_direction"))
-      assert direction_param.default == "asc"
+      assert match?(
+               %{
+                 name: "order_by_direction",
+                 in: :query,
+                 type: :string,
+                 enum: ["asc", "desc"],
+                 default: "asc",
+                 required: true
+               },
+               direction_param
+             )
     end
   end
 end
