@@ -1,40 +1,34 @@
 defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
   use ExUnit.Case, async: true
 
+  import PhoenixSwagger.Schema
+
   describe "schema_definition/1" do
     test "converts simple schema with primitive types" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           name: Zoi.string(description: "Name", example: "John"),
           age: Zoi.integer(description: "Age", example: 30)
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            name(:string, "Name", required: true, example: "John")
+            age(:integer, "Age", required: true, example: 30)
+          end
 
-      assert %{
-               type: :object,
-               required: [:name, :age],
-               properties: %{
-                 name: %{
-                   type: :string,
-                   description: "Name",
-                   example: "John"
-                 },
-                 age: %{
-                   type: :integer,
-                   description: "Age",
-                   example: 30
-                 }
-               },
-               example: %{
-                 name: "John",
-                 age: 30
-               }
-             } == swagger_schema
+          example(%{
+            name: "John",
+            age: 30
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles nested objects without flattening" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           user:
             Zoi.map(%{
@@ -43,143 +37,136 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
             })
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            user(
+              Schema.new do
+                properties do
+                  name(:string, nil, required: true, example: "John")
+                  email(:string, nil, required: true, example: "john@example.com")
+                end
+              end,
+              nil,
+              required: true
+            )
+          end
 
-      assert %{
-               type: :object,
-               required: [:user],
-               properties: %{
-                 user: %{
-                   type: :object,
-                   required: [:name, :email],
-                   properties: %{
-                     name: %{type: :string, example: "John"},
-                     email: %{type: :string, example: "john@example.com"}
-                   }
-                 }
-               },
-               example: %{
-                 user: %{
-                   name: "John",
-                   email: "john@example.com"
-                 }
-               }
-             } == swagger_schema
+          example(%{
+            user: %{
+              name: "John",
+              email: "john@example.com"
+            }
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles optional fields" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           required_field: Zoi.string(),
           optional_field: Zoi.string() |> Zoi.optional()
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            required_field(:string, nil, required: true)
+            optional_field(:string, nil)
+          end
+        end
 
-      assert %{
-               type: :object,
-               required: [:required_field],
-               properties: %{
-                 required_field: %{type: :string},
-                 optional_field: %{type: :string}
-               }
-             } == swagger_schema
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles arrays" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           tags: Zoi.array(Zoi.string(), example: ["tag1", "tag2"])
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            tags(:array, nil, required: true, example: ["tag1", "tag2"], items: %{type: :string})
+          end
 
-      assert %{
-               type: :object,
-               required: [:tags],
-               properties: %{
-                 tags: %{
-                   type: :array,
-                   items: %{type: :string},
-                   example: ["tag1", "tag2"]
-                 }
-               },
-               example: %{
-                 tags: ["tag1", "tag2"]
-               }
-             } == swagger_schema
+          example(%{
+            tags: ["tag1", "tag2"]
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles enums" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           status: Zoi.enum(["active", "inactive"], example: "active")
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            status(:string, nil,
+              required: true,
+              enum: ["active", "inactive"],
+              example: "active"
+            )
+          end
 
-      assert %{
-               type: :object,
-               required: [:status],
-               properties: %{
-                 status: %{
-                   type: :string,
-                   enum: ["active", "inactive"],
-                   example: "active"
-                 }
-               },
-               example: %{
-                 status: "active"
-               }
-             } == swagger_schema
+          example(%{
+            status: "active"
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles datetime format" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           created_at: Zoi.datetime()
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            created_at(:string, nil, required: true, format: :"date-time")
+          end
+        end
 
-      assert %{
-               type: :object,
-               required: [:created_at],
-               properties: %{
-                 created_at: %{
-                   type: :string,
-                   format: :"date-time"
-                 }
-               }
-             } == swagger_schema
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles default values" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           direction: Zoi.enum(["asc", "desc"]) |> Zoi.default("asc")
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            direction(:string, nil,
+              required: true,
+              enum: ["asc", "desc"],
+              default: "asc"
+            )
+          end
 
-      assert %{
-               type: :object,
-               required: [:direction],
-               properties: %{
-                 direction: %{
-                   type: :string,
-                   enum: ["asc", "desc"],
-                   default: "asc"
-                 }
-               },
-               example: %{
-                 direction: "asc"
-               }
-             } == swagger_schema
+          example(%{
+            direction: "asc"
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles complex nested schema" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           name: Zoi.string(description: "User name", example: "John Doe"),
           email: Zoi.string(description: "Email", example: "john@example.com"),
@@ -193,110 +180,87 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
           tags: Zoi.array(Zoi.string(), example: ["developer", "elixir"])
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            name(:string, "User name", required: true, example: "John Doe")
+            email(:string, "Email", required: true, example: "john@example.com")
+            age(:integer, nil, example: 30)
 
-      assert %{
-               type: :object,
-               required: [:name, :email, :tags],
-               properties: %{
-                 name: %{
-                   type: :string,
-                   description: "User name",
-                   example: "John Doe"
-                 },
-                 email: %{
-                   type: :string,
-                   description: "Email",
-                   example: "john@example.com"
-                 },
-                 age: %{
-                   type: :integer,
-                   example: 30
-                 },
-                 preferences: %{
-                   type: :object,
-                   required: [:newsletter, :theme],
-                   properties: %{
-                     newsletter: %{
-                       type: :boolean,
-                       example: true
-                     },
-                     theme: %{
-                       type: :string,
-                       enum: ["light", "dark"],
-                       example: "dark"
-                     }
-                   }
-                 },
-                 tags: %{
-                   type: :array,
-                   items: %{type: :string},
-                   example: ["developer", "elixir"]
-                 }
-               },
-               example: %{
-                 name: "John Doe",
-                 email: "john@example.com",
-                 age: 30,
-                 preferences: %{
-                   newsletter: true,
-                   theme: "dark"
-                 },
-                 tags: ["developer", "elixir"]
-               }
-             } == swagger_schema
+            preferences(
+              Schema.new do
+                properties do
+                  newsletter(:boolean, nil, required: true, example: true)
+                  theme(:string, nil, required: true, enum: ["light", "dark"], example: "dark")
+                end
+              end,
+              nil
+            )
+
+            tags(:array, nil,
+              required: true,
+              items: %{type: :string},
+              example: ["developer", "elixir"]
+            )
+          end
+
+          example(%{
+            name: "John Doe",
+            email: "john@example.com",
+            age: 30,
+            preferences: %{
+              newsletter: true,
+              theme: "dark"
+            },
+            tags: ["developer", "elixir"]
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles float type" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           price: Zoi.float(description: "Price", example: 19.99)
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            price(:number, "Price", required: true, example: 19.99)
+          end
 
-      assert %{
-               type: :object,
-               required: [:price],
-               properties: %{
-                 price: %{
-                   type: :number,
-                   description: "Price",
-                   example: 19.99
-                 }
-               },
-               example: %{
-                 price: 19.99
-               }
-             } == swagger_schema
+          example(%{
+            price: 19.99
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles boolean type" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           active: Zoi.boolean(description: "Active status", example: true)
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            active(:boolean, "Active status", required: true, example: true)
+          end
 
-      assert %{
-               type: :object,
-               required: [:active],
-               properties: %{
-                 active: %{
-                   type: :boolean,
-                   description: "Active status",
-                   example: true
-                 }
-               },
-               example: %{
-                 active: true
-               }
-             } == swagger_schema
+          example(%{
+            active: true
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles deeply nested objects" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           organization:
             Zoi.map(%{
@@ -314,54 +278,62 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
             })
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            organization(
+              Schema.new do
+                properties do
+                  name(:string, nil, required: true, example: "Acme Corp")
 
-      assert %{
-               type: :object,
-               required: [:organization],
-               properties: %{
-                 organization: %{
-                   type: :object,
-                   required: [:name, :address],
-                   properties: %{
-                     name: %{type: :string, example: "Acme Corp"},
-                     address: %{
-                       type: :object,
-                       required: [:street, :city, :country],
-                       properties: %{
-                         street: %{type: :string, example: "123 Main St"},
-                         city: %{type: :string, example: "Springfield"},
-                         country: %{
-                           type: :object,
-                           required: [:code, :name],
-                           properties: %{
-                             code: %{type: :string, example: "US"},
-                             name: %{type: :string, example: "United States"}
-                           }
-                         }
-                       }
-                     }
-                   }
-                 }
-               },
-               example: %{
-                 organization: %{
-                   name: "Acme Corp",
-                   address: %{
-                     street: "123 Main St",
-                     city: "Springfield",
-                     country: %{
-                       code: "US",
-                       name: "United States"
-                     }
-                   }
-                 }
-               }
-             } == swagger_schema
+                  address(
+                    Schema.new do
+                      properties do
+                        street(:string, nil, required: true, example: "123 Main St")
+                        city(:string, nil, required: true, example: "Springfield")
+
+                        country(
+                          Schema.new do
+                            properties do
+                              code(:string, nil, required: true, example: "US")
+                              name(:string, nil, required: true, example: "United States")
+                            end
+                          end,
+                          nil,
+                          required: true
+                        )
+                      end
+                    end,
+                    nil,
+                    required: true
+                  )
+                end
+              end,
+              nil,
+              required: true
+            )
+          end
+
+          example(%{
+            organization: %{
+              name: "Acme Corp",
+              address: %{
+                street: "123 Main St",
+                city: "Springfield",
+                country: %{
+                  code: "US",
+                  name: "United States"
+                }
+              }
+            }
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles arrays of objects" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           users:
             Zoi.array(
@@ -373,52 +345,52 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
             )
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            users(
+              :array,
+              nil,
+              required: true,
+              items:
+                Schema.new do
+                  properties do
+                    name(:string, nil, required: true, example: "John")
+                    email(:string, nil, required: true, example: "john@example.com")
+                  end
+                end,
+              example: [%{name: "John", email: "john@example.com"}]
+            )
+          end
 
-      assert %{
-               type: :object,
-               required: [:users],
-               properties: %{
-                 users: %{
-                   type: :array,
-                   items: %{
-                     type: :object,
-                     required: [:name, :email],
-                     properties: %{
-                       name: %{type: :string, example: "John"},
-                       email: %{type: :string, example: "john@example.com"}
-                     }
-                   },
-                   example: [%{name: "John", email: "john@example.com"}]
-                 }
-               },
-               example: %{
-                 users: [%{name: "John", email: "john@example.com"}]
-               }
-             } == swagger_schema
+          example(%{
+            users: [%{name: "John", email: "john@example.com"}]
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles schema without examples" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           name: Zoi.string(),
           age: Zoi.integer()
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            name(:string, nil, required: true)
+            age(:integer, nil, required: true)
+          end
+        end
 
-      assert %{
-               type: :object,
-               required: [:name, :age],
-               properties: %{
-                 name: %{type: :string},
-                 age: %{type: :integer}
-               }
-             } == swagger_schema
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles partial examples in nested objects" do
-      schema =
+      zoi_schema =
         Zoi.map(%{
           user:
             Zoi.map(%{
@@ -427,39 +399,38 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
             })
         })
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected =
+        schema do
+          properties do
+            user(
+              Schema.new do
+                properties do
+                  name(:string, nil, required: true, example: "John")
+                  email(:string, nil, required: true)
+                end
+              end,
+              nil,
+              required: true
+            )
+          end
 
-      assert %{
-               type: :object,
-               required: [:user],
-               properties: %{
-                 user: %{
-                   type: :object,
-                   required: [:name, :email],
-                   properties: %{
-                     name: %{type: :string, example: "John"},
-                     email: %{type: :string}
-                   }
-                 }
-               },
-               example: %{
-                 user: %{
-                   name: "John"
-                 }
-               }
-             } == swagger_schema
+          example(%{
+            user: %{
+              name: "John"
+            }
+          })
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
 
     test "handles empty map schema" do
-      schema = Zoi.map(%{})
+      zoi_schema = Zoi.map(%{})
 
-      swagger_schema = ZoiPhoenixSwagger.schema_definition(schema)
+      expected = schema do
+      end
 
-      assert %{
-               type: :object,
-               required: [],
-               properties: %{}
-             } == swagger_schema
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
   end
 end
