@@ -7,6 +7,7 @@ defmodule ZoiPhoenixSwagger do
 
   alias PhoenixSwagger.Path
   alias PhoenixSwagger.Path.PathObject
+  alias PhoenixSwagger.Schema
 
   @doc """
   Converts a Zoi schema to Phoenix Swagger parameters.
@@ -37,7 +38,8 @@ defmodule ZoiPhoenixSwagger do
   @doc """
   Converts a Zoi schema to a Phoenix Swagger schema definition.
 
-  Returns a schema map suitable for use as a value in swagger_definitions/0.
+  Returns a JSON map (with string keys) suitable for use in swagger_definitions/0,
+  matching the output format of the `swagger_schema` macro.
 
   ## Example
 
@@ -54,14 +56,11 @@ defmodule ZoiPhoenixSwagger do
   def schema_definition(zoi_schema) do
     json_schema = Zoi.to_json_schema(zoi_schema)
 
-    swagger_schema = %{
-      type: :object,
-      properties: convert_properties(json_schema[:properties] || %{}),
-      required: json_schema[:required] || []
-    }
-
-    # Add top-level example if we can generate one
-    maybe_add_example(swagger_schema, json_schema)
+    %Schema{type: :object}
+    |> add_properties(json_schema[:properties] || %{})
+    |> add_required(json_schema[:required] || [])
+    |> maybe_add_schema_example(json_schema)
+    |> PhoenixSwagger.to_json()
   end
 
   defp build_params(properties, required, path, metadata_map, path_object) do
@@ -149,52 +148,62 @@ defmodule ZoiPhoenixSwagger do
 
   # Schema definition helper functions
 
-  # Convert JSON Schema properties to Swagger properties
-  defp convert_properties(json_properties) do
-    Map.new(json_properties, fn {key, prop_schema} ->
-      {key, convert_property(prop_schema)}
-    end)
+  # Add properties to schema
+  defp add_properties(schema, json_properties) when map_size(json_properties) == 0 do
+    schema
   end
 
-  # Convert a single property - nested object
-  defp convert_property(%{type: :object, properties: nested_props} = schema) do
-    %{
-      type: :object,
-      properties: convert_properties(nested_props)
-    }
-    |> maybe_add_property_opt(:required, schema[:required])
-    |> maybe_add_property_opt(:description, schema[:description])
-    |> maybe_add_property_opt(:example, schema[:example])
+  defp add_properties(schema, json_properties) do
+    properties =
+      Map.new(json_properties, fn {key, prop_schema} ->
+        {key, convert_to_schema(prop_schema)}
+      end)
+
+    %{schema | properties: properties}
   end
 
-  # Convert a single property - array type
-  defp convert_property(%{type: :array} = schema) do
-    %{
-      type: :array,
-      items: convert_property(schema[:items] || %{type: :string})
-    }
-    |> maybe_add_property_opt(:description, schema[:description])
-    |> maybe_add_property_opt(:example, schema[:example])
+  # Add required fields to schema (sorted for consistency)
+  defp add_required(schema, []), do: schema
+  defp add_required(schema, required), do: %{schema | required: Enum.sort(required)}
+
+  # Convert a single property to Schema struct - nested object
+  defp convert_to_schema(%{type: :object, properties: nested_props} = prop_schema) do
+    nested_required = prop_schema[:required] || []
+
+    %Schema{type: :object}
+    |> add_properties(nested_props)
+    |> add_required(nested_required)
+    |> maybe_add_schema_field(:description, prop_schema[:description])
+    |> maybe_add_schema_field(:example, prop_schema[:example])
   end
 
-  # Convert a single property - primitive type
-  defp convert_property(schema) do
-    %{type: schema[:type]}
-    |> maybe_add_property_opt(:description, schema[:description])
-    |> maybe_add_property_opt(:enum, schema[:enum])
-    |> maybe_add_property_opt(:format, schema[:format])
-    |> maybe_add_property_opt(:default, schema[:default])
-    |> maybe_add_property_opt(:example, schema[:example])
+  # Convert a single property to Schema struct - array type
+  defp convert_to_schema(%{type: :array} = prop_schema) do
+    items_schema = convert_to_schema(prop_schema[:items] || %{type: :string})
+
+    %Schema{type: :array, items: items_schema}
+    |> maybe_add_schema_field(:description, prop_schema[:description])
+    |> maybe_add_schema_field(:example, prop_schema[:example])
   end
 
-  defp maybe_add_property_opt(map, _key, nil), do: map
-  defp maybe_add_property_opt(map, key, value), do: Map.put(map, key, value)
+  # Convert a single property to Schema struct - primitive type
+  defp convert_to_schema(prop_schema) do
+    %Schema{type: prop_schema[:type]}
+    |> maybe_add_schema_field(:description, prop_schema[:description])
+    |> maybe_add_schema_field(:enum, prop_schema[:enum])
+    |> maybe_add_schema_field(:format, prop_schema[:format])
+    |> maybe_add_schema_field(:default, prop_schema[:default])
+    |> maybe_add_schema_field(:example, prop_schema[:example])
+  end
+
+  defp maybe_add_schema_field(schema, _key, nil), do: schema
+  defp maybe_add_schema_field(schema, key, value), do: Map.put(schema, key, value)
 
   # Generate top-level example from schema
-  defp maybe_add_example(swagger_schema, json_schema) do
+  defp maybe_add_schema_example(swagger_schema, json_schema) do
     case generate_example(json_schema) do
       nil -> swagger_schema
-      example -> Map.put(swagger_schema, :example, example)
+      example -> %{swagger_schema | example: example}
     end
   end
 

@@ -1,8 +1,9 @@
 defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
   use ExUnit.Case, async: true
+  use PhoenixSwagger
 
-  import PhoenixSwagger
-  require PhoenixSwagger.Schema, as: Schema
+  # Note: required lists are sorted alphabetically for consistency
+  # The DSL prepends to required list, so declare in reverse alpha order
 
   describe "schema_definition/1" do
     test "converts simple schema with primitive types" do
@@ -13,16 +14,13 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
             name(:string, "Name", required: true, example: "John")
             age(:integer, "Age", required: true, example: 30)
           end
 
-          example(%{
-            name: "John",
-            age: 30
-          })
+          example(%{name: "John", age: 30})
         end
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
@@ -39,7 +37,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
             user(
               Schema.new do
@@ -72,10 +70,10 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
-            required_field(:string, nil, required: true)
             optional_field(:string, nil)
+            required_field(:string, nil, required: true)
           end
         end
 
@@ -89,14 +87,16 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
-            tags(:array, nil, required: true, example: ["tag1", "tag2"], items: %{type: :string})
+            tags(:array, nil,
+              required: true,
+              items: %Schema{type: :string},
+              example: ["tag1", "tag2"]
+            )
           end
 
-          example(%{
-            tags: ["tag1", "tag2"]
-          })
+          example(%{tags: ["tag1", "tag2"]})
         end
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
@@ -109,18 +109,12 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
-            status(:string, nil,
-              required: true,
-              enum: ["active", "inactive"],
-              example: "active"
-            )
+            status(:string, nil, required: true, enum: ["active", "inactive"], example: "active")
           end
 
-          example(%{
-            status: "active"
-          })
+          example(%{status: "active"})
         end
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
@@ -133,7 +127,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
             created_at(:string, nil, required: true, format: :"date-time")
           end
@@ -149,18 +143,12 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
-            direction(:string, nil,
-              required: true,
-              enum: ["asc", "desc"],
-              default: "asc"
-            )
+            direction(:string, nil, required: true, enum: ["asc", "desc"], default: "asc")
           end
 
-          example(%{
-            direction: "asc"
-          })
+          example(%{direction: "asc"})
         end
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
@@ -181,27 +169,29 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
           tags: Zoi.array(Zoi.string(), example: ["developer", "elixir"])
         })
 
+      # Declare in reverse alpha order: tags, name, email to get ["email", "name", "tags"]
       expected =
-        schema do
+        swagger_schema do
           properties do
+            tags(:array, nil,
+              required: true,
+              items: %Schema{type: :string},
+              example: ["developer", "elixir"]
+            )
+
             name(:string, "User name", required: true, example: "John Doe")
             email(:string, "Email", required: true, example: "john@example.com")
             age(:integer, nil, example: 30)
 
             preferences(
               Schema.new do
+                # Declare in reverse alpha order: theme, newsletter to get ["newsletter", "theme"]
                 properties do
-                  newsletter(:boolean, nil, required: true, example: true)
                   theme(:string, nil, required: true, enum: ["light", "dark"], example: "dark")
+                  newsletter(:boolean, nil, required: true, example: true)
                 end
               end,
               nil
-            )
-
-            tags(:array, nil,
-              required: true,
-              items: %{type: :string},
-              example: ["developer", "elixir"]
             )
           end
 
@@ -227,14 +217,12 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
             price(:number, "Price", required: true, example: 19.99)
           end
 
-          example(%{
-            price: 19.99
-          })
+          example(%{price: 19.99})
         end
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
@@ -247,14 +235,12 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
             active(:boolean, "Active status", required: true, example: true)
           end
 
-          example(%{
-            active: true
-          })
+          example(%{active: true})
         end
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
@@ -280,29 +266,33 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
             organization(
               Schema.new do
+                # Declare in reverse alpha order: name, address to get ["address", "name"]
                 properties do
                   name(:string, nil, required: true, example: "Acme Corp")
 
                   address(
                     Schema.new do
+                      # Declare in reverse alpha order: street, country, city to get ["city", "country", "street"]
                       properties do
                         street(:string, nil, required: true, example: "123 Main St")
-                        city(:string, nil, required: true, example: "Springfield")
 
                         country(
                           Schema.new do
+                            # Declare in reverse alpha order: name, code to get ["code", "name"]
                             properties do
-                              code(:string, nil, required: true, example: "US")
                               name(:string, nil, required: true, example: "United States")
+                              code(:string, nil, required: true, example: "US")
                             end
                           end,
                           nil,
                           required: true
                         )
+
+                        city(:string, nil, required: true, example: "Springfield")
                       end
                     end,
                     nil,
@@ -347,7 +337,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
             users(
               :array,
@@ -355,6 +345,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
               required: true,
               items:
                 Schema.new do
+                  # Declare in reverse alpha order: name, email to get ["email", "name"]
                   properties do
                     name(:string, nil, required: true, example: "John")
                     email(:string, nil, required: true, example: "john@example.com")
@@ -364,9 +355,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
             )
           end
 
-          example(%{
-            users: [%{name: "John", email: "john@example.com"}]
-          })
+          example(%{users: [%{name: "John", email: "john@example.com"}]})
         end
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
@@ -379,8 +368,9 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
           age: Zoi.integer()
         })
 
+      # Declare in reverse alpha order: name, age to get ["age", "name"]
       expected =
-        schema do
+        swagger_schema do
           properties do
             name(:string, nil, required: true)
             age(:integer, nil, required: true)
@@ -401,10 +391,11 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
         })
 
       expected =
-        schema do
+        swagger_schema do
           properties do
             user(
               Schema.new do
+                # Declare in reverse alpha order: name, email to get ["email", "name"]
                 properties do
                   name(:string, nil, required: true, example: "John")
                   email(:string, nil, required: true)
@@ -416,9 +407,7 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
           end
 
           example(%{
-            user: %{
-              name: "John"
-            }
+            user: %{name: "John"}
           })
         end
 
@@ -428,8 +417,9 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
     test "handles empty map schema" do
       zoi_schema = Zoi.map(%{})
 
-      expected = schema do
-      end
+      expected =
+        swagger_schema do
+        end
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
