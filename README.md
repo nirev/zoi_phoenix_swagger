@@ -49,7 +49,7 @@ defmodule MyAppWeb.ItemController do
   end
 
   def index(conn, params) do
-    with {:ok, validated} <- Zoi.validate(@list_params, params) do
+    with {:ok, validated} <- Zoi.parse(@list_params, params) do
       # Use validated params
     end
   end
@@ -82,7 +82,7 @@ defmodule MyAppWeb.UserController do
   end
 
   def create(conn, params) do
-    with {:ok, user_data} <- Zoi.validate(@create_user_schema, params) do
+    with {:ok, user_data} <- Zoi.parse(@create_user_schema, params) do
       # Create user
     end
   end
