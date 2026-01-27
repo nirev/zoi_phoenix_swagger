@@ -27,7 +27,67 @@ end
 
 ## Usage
 
-Coming soon.
+Define your Zoi schema once and use it for both validation and Swagger documentation.
+
+### Parameters (query, path, body params)
+
+```elixir
+defmodule MyAppWeb.ItemController do
+  use MyAppWeb, :controller
+  use PhoenixSwagger
+
+  @list_params Zoi.map(%{
+    category_id: Zoi.string(metadata: [in: :path]),
+    status: Zoi.enum(["pending", "approved"]) |> Zoi.optional(),
+    order_by: Zoi.enum(["inserted_at", "name"]) |> Zoi.default("inserted_at")
+  })
+
+  swagger_path :index do
+    get("/api/categories/{category_id}/items")
+    ZoiPhoenixSwagger.parameters(@list_params)
+    response(200, "Success")
+  end
+
+  def index(conn, params) do
+    with {:ok, validated} <- Zoi.validate(@list_params, params) do
+      # Use validated params
+    end
+  end
+end
+```
+
+### Schema Definitions (request/response bodies)
+
+```elixir
+defmodule MyAppWeb.UserController do
+  use MyAppWeb, :controller
+  use PhoenixSwagger
+
+  @create_user_schema Zoi.map(%{
+    name: Zoi.string(description: "User name", example: "John Doe"),
+    email: Zoi.string(description: "Email address", example: "john@example.com"),
+    age: Zoi.integer(example: 30) |> Zoi.optional()
+  })
+
+  def swagger_definitions do
+    %{
+      CreateUserRequest: ZoiPhoenixSwagger.schema_definition(@create_user_schema)
+    }
+  end
+
+  swagger_path :create do
+    post("/api/users")
+    parameter("user", :body, Schema.ref(:CreateUserRequest), "User attributes")
+    response(201, "Created")
+  end
+
+  def create(conn, params) do
+    with {:ok, user_data} <- Zoi.validate(@create_user_schema, params) do
+      # Create user
+    end
+  end
+end
+```
 
 ## Development
 
