@@ -55,6 +55,8 @@ defmodule ZoiPhoenixSwagger do
   @spec schema_definition(Zoi.schema()) :: map()
   def schema_definition(zoi_schema) do
     json_schema = Zoi.to_json_schema(zoi_schema)
+    metadata_map = extract_metadata(zoi_schema)
+    json_schema = filter_doc_fields(json_schema, metadata_map, [])
 
     %Schema{type: :object}
     |> add_properties(json_schema[:properties] || %{})
@@ -65,7 +67,11 @@ defmodule ZoiPhoenixSwagger do
 
   defp build_params(properties, required, path, metadata_map, path_object) do
     Enum.reduce(properties, path_object, fn {key, prop_schema}, acc ->
-      build_param(key, prop_schema, required, path, metadata_map, acc)
+      if doc_hidden?(metadata_map, path ++ [key]) do
+        acc
+      else
+        build_param(key, prop_schema, required, path, metadata_map, acc)
+      end
     end)
   end
 
@@ -145,6 +151,67 @@ defmodule ZoiPhoenixSwagger do
 
   defp maybe_add_opt(opts, _key, nil), do: opts
   defp maybe_add_opt(opts, key, value), do: Keyword.put(opts, key, value)
+
+  # Check if a field should be hidden from documentation
+  defp doc_hidden?(metadata_map, path) do
+    case Map.get(metadata_map, path) do
+      nil -> false
+      metadata -> Keyword.get(metadata, :doc) == false
+    end
+  end
+
+  # Recursively remove fields with doc: false from JSON schema
+  defp filter_doc_fields(%{properties: properties} = json_schema, metadata_map, path)
+       when is_map(properties) and map_size(properties) > 0 do
+    hidden_keys =
+      for {key, _} <- properties,
+          doc_hidden?(metadata_map, path ++ [key]),
+          into: MapSet.new(),
+          do: key
+
+    if MapSet.size(hidden_keys) == 0 do
+      filter_nested_doc_fields(json_schema, metadata_map, path)
+    else
+      filtered_properties =
+        for {key, prop} <- properties,
+            not MapSet.member?(hidden_keys, key),
+            into: %{} do
+          prop =
+            if match?(%{type: :object, properties: _}, prop),
+              do: filter_doc_fields(prop, metadata_map, path ++ [key]),
+              else: prop
+
+          {key, prop}
+        end
+
+      json_schema
+      |> Map.put(:properties, filtered_properties)
+      |> filter_required(hidden_keys)
+    end
+  end
+
+  defp filter_doc_fields(json_schema, _metadata_map, _path), do: json_schema
+
+  # Recurse into nested objects even when no fields are hidden at this level
+  defp filter_nested_doc_fields(%{properties: properties} = json_schema, metadata_map, path) do
+    filtered_properties =
+      for {key, prop} <- properties, into: %{} do
+        prop =
+          if match?(%{type: :object, properties: _}, prop),
+            do: filter_doc_fields(prop, metadata_map, path ++ [key]),
+            else: prop
+
+        {key, prop}
+      end
+
+    Map.put(json_schema, :properties, filtered_properties)
+  end
+
+  defp filter_required(%{required: required} = schema, hidden_keys) do
+    Map.put(schema, :required, Enum.reject(required, &MapSet.member?(hidden_keys, &1)))
+  end
+
+  defp filter_required(schema, _hidden_keys), do: schema
 
   # Schema definition helper functions
 

@@ -269,7 +269,65 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
              )
     end
 
-    # Phase 7: Full Integration
+    # Phase 7: doc: false
+
+    test "excludes fields with doc: false from parameters", %{path: path} do
+      schema =
+        Zoi.map(%{
+          name: Zoi.string(),
+          internal_id: Zoi.string(metadata: [doc: false])
+        })
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      params = result.operation.parameters
+      assert length(params) == 1
+      assert match?(%{name: "name", in: :query, type: :string, required: true}, hd(params))
+    end
+
+    test "excludes optional fields with doc: false from parameters", %{path: path} do
+      schema =
+        Zoi.map(%{
+          name: Zoi.string(),
+          secret: Zoi.string(metadata: [doc: false]) |> Zoi.optional()
+        })
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert match?(%{name: "name", in: :query, type: :string, required: true}, param)
+    end
+
+    test "excludes nested fields with doc: false from parameters", %{path: path} do
+      schema =
+        Zoi.map(%{
+          filter:
+            Zoi.map(%{
+              status: Zoi.string(),
+              internal: Zoi.string(metadata: [doc: false])
+            })
+        })
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert match?(%{name: "filter[status]", in: :query, type: :string, required: true}, param)
+    end
+
+    test "doc: false coexists with other metadata in parameters", %{path: path} do
+      schema =
+        Zoi.map(%{
+          visible: Zoi.string(),
+          hidden: Zoi.string(metadata: [doc: false, in: :header])
+        })
+
+      result = ZoiPhoenixSwagger.parameters(path, schema)
+
+      assert [param] = result.operation.parameters
+      assert match?(%{name: "visible", in: :query, type: :string, required: true}, param)
+    end
+
+    # Phase 8: Full Integration
 
     test "handles complete schema from requirements", %{path: path} do
       schema =
