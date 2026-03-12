@@ -423,5 +423,94 @@ defmodule ZoiPhoenixSwagger.SchemaDefinitionTest do
 
       assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
     end
+
+    test "excludes fields with doc: false" do
+      zoi_schema =
+        Zoi.map(%{
+          name: Zoi.string(description: "Name", example: "John"),
+          internal_id: Zoi.string(metadata: [doc: false]),
+          age: Zoi.integer(description: "Age", example: 30)
+        })
+
+      expected =
+        swagger_schema do
+          properties do
+            name(:string, "Name", required: true, example: "John")
+            age(:integer, "Age", required: true, example: 30)
+          end
+
+          example(%{name: "John", age: 30})
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
+    end
+
+    test "excludes optional fields with doc: false" do
+      zoi_schema =
+        Zoi.map(%{
+          name: Zoi.string(example: "John"),
+          secret: Zoi.string(metadata: [doc: false]) |> Zoi.optional()
+        })
+
+      expected =
+        swagger_schema do
+          properties do
+            name(:string, nil, required: true, example: "John")
+          end
+
+          example(%{name: "John"})
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
+    end
+
+    test "excludes nested fields with doc: false" do
+      zoi_schema =
+        Zoi.map(%{
+          user:
+            Zoi.map(%{
+              name: Zoi.string(example: "John"),
+              internal_token: Zoi.string(metadata: [doc: false])
+            })
+        })
+
+      expected =
+        swagger_schema do
+          properties do
+            user(
+              Schema.new do
+                properties do
+                  name(:string, nil, required: true, example: "John")
+                end
+              end,
+              nil,
+              required: true
+            )
+          end
+
+          example(%{user: %{name: "John"}})
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
+    end
+
+    test "doc: false coexists with other metadata" do
+      zoi_schema =
+        Zoi.map(%{
+          visible: Zoi.string(example: "hello"),
+          hidden: Zoi.string(metadata: [doc: false, in: :header])
+        })
+
+      expected =
+        swagger_schema do
+          properties do
+            visible(:string, nil, required: true, example: "hello")
+          end
+
+          example(%{visible: "hello"})
+        end
+
+      assert expected == ZoiPhoenixSwagger.schema_definition(zoi_schema)
+    end
   end
 end
