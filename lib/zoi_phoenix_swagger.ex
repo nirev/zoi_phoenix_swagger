@@ -93,9 +93,9 @@ defmodule ZoiPhoenixSwagger do
     name = build_param_name(path, key, location)
     type = prop_schema[:type]
     description = prop_schema[:description] || ""
-    is_required = location == :path or key in required
+    required? = location == :path or (key in required and not Map.has_key?(prop_schema, :default))
 
-    opts = [required: is_required]
+    opts = [required: required?]
     opts = maybe_add_opt(opts, :enum, prop_schema[:enum])
     opts = maybe_add_opt(opts, :format, prop_schema[:format])
     opts = maybe_add_opt(opts, :default, prop_schema[:default])

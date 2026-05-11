@@ -13,7 +13,7 @@ defmodule ZoiPhoenixSwagger.SwaggerPathTest do
       order_by(:query, :string, "", enum: ["inserted_at", "status"])
 
       order_by_direction(:query, :string, "",
-        required: true,
+        required: false,
         enum: ["asc", "desc"],
         default: "asc"
       )

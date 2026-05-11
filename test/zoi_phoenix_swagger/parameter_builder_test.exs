@@ -122,7 +122,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
                  type: :string,
                  enum: ["asc", "desc"],
                  default: "asc",
-                 required: true
+                 required: false
                },
                param
              )
@@ -392,7 +392,7 @@ defmodule ZoiPhoenixSwagger.ParameterBuilderTest do
                  type: :string,
                  enum: ["asc", "desc"],
                  default: "asc",
-                 required: true
+                 required: false
                },
                direction_param
              )
